@@ -1,81 +1,56 @@
+import bcrypt, { hash } from "bcryptjs";
 import { db } from "../DB/connection.mjs";
-import bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
-import 'dotenv/config'
 
-export const register = async (req,res)=>{
+
+export const register = async (req, res) => {
     try {
-       
-        const {username, email, password} = req.body;
 
+        const { username, email, password } = req.body;
 
-        const userFound = await db.collection('users').findOne({email});
+        const salt = bcrypt.genSaltSync(10);
+        const passwordHash = bcrypt.hashSync(password, salt);
 
-        if(userFound){
-            res.send('User already exists.')
-        }else{
-
-        const hashPassword = bcrypt.hashSync(password, 10);
-
-        await db.collection('users').insertOne({
-            username, email, password: hashPassword
+        db.collection('users').insertOne({
+            username,
+            email,
+            password: passwordHash
         });
-        
-        res.send('User Registered successfully!')
-      }
 
-    } catch (error) {
-        console.log(error);
-        res.send("User Registration Failed!")
-    }
-
-
-}
-
-
-
-
-export const login = async (req,res)=>{
-    try {
-        
-         const { email, password} = req.body;
-
-
-        const userFound = await db.collection('users').findOne({email});
-
-        if(userFound){
-          
-          const isUserValid = bcrypt.compareSync(password,userFound.password)
-
-            if(isUserValid){
-
-              const token =  jwt.sign({username: userFound.username, email: userFound.email},process.env.SECRET_KEY,{ expiresIn: 60*60*24*3});
-
-              res.send({
-                token
-              })
-
-            }
-            else{
-                res.send({errorMessage: "Password is invalid"})
-            }
-
-
-        }
-        else{
-            res.send({errorMessage:"User not Found with that email."})
-        }
-
+        res.send({message: 'User Registered successfully!'});
 
 
 
     } catch (error) {
-        console.log(error);
+        console.log(error)
         res.send({errorMessage: error})
     }
 }
 
 
+export const login = async (req,res)=>{
+    try {
+        const {email, password} = req.body;
+
+
+        const isUserEmailValid = await db.collection('users').findOne({email});
+        console.log("fsdfsdfd",isUserEmailValid)
+
+        if(isUserEmailValid){
+
+           const isPasswordMatched = bcrypt.compareSync(password, isUserEmailValid.password);
+        
+           if(isPasswordMatched){
+
+
+           const token = jwt.sign({email: isUserEmailValid.email, password : isUserEmailValid.password}, process.env.SECRET_KEY, {expiresIn: 60 * 60 * 24});
+
+
+           res.cookie('token',token,{maxAge: 60*60*24,httpOnly:true});
+
+
+
+            res.send({token})
 
 
 
@@ -83,7 +58,29 @@ export const login = async (req,res)=>{
 
 
 
+           }
+           else{
+            res.send({errorMessage: "Incorrect Password"})
+           }
+
+
+
+        }else{
+
+            res.send({errorMessage: "User not found!"})
+        }
 
 
 
 
+    } catch (error) {
+        console.log(error)
+        res.send({errorMessage: error})
+    }
+}
+
+
+export const me =(req,res)=>{
+    const {email} =req.user;
+    res.send({email});
+}
